@@ -1,0 +1,276 @@
+<style>
+  .sticker-outline-tool {
+    max-width: 600px;
+    margin: auto;
+    text-align: center;
+    font-family: sans-serif;
+  }
+  .sticker-outline-tool button {
+    padding: 0.75em 1.5em;
+    font-size: 1rem;
+    background-color: #3185cc;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    margin: 0.5em;
+    cursor: pointer;
+  }
+  .sticker-outline-tool .small-button {
+    padding: 0.4em 0.8em;
+    font-size: 0.85rem;
+    background-color: #f44336;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    margin: 0.3em;
+    cursor: pointer;
+  }
+  .sticker-outline-tool button:disabled,
+  .sticker-outline-tool .small-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+  .sticker-outline-tool .drop-area {
+    border: 3px dashed #ccc;
+    border-radius: 8px;
+    height: 300px;
+    position: relative;
+    margin-bottom: 1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    cursor: pointer;
+  }
+  .sticker-outline-tool .drop-area.hover {
+    border-color: #3185cc;
+    background-color: #f0f8ff;
+  }
+  .sticker-outline-tool canvas {
+    max-width: 100%;
+    border-radius: 8px;
+    display: none;
+    touch-action: none;
+  }
+</style>
+<div class="sticker-outline-tool">
+  <h2>Custom Sticker Outline Tool</h2>
+  <p>Drag & drop or click to upload an image below, manually trace the outline, then smooth and download it as a transparent PNG.</p>
+
+  <div class="drop-area" id="dropArea">Drag & drop or click to upload image</div>
+  <input type="file" id="fileInput" accept="image/*" style="display:none;" />
+  <canvas id="canvas"></canvas>
+
+  <div>
+    <button id="startDraw" disabled>Start Tracing</button>
+    <button id="smooth" disabled>Smooth Outline</button>
+    <button id="download" disabled>Download PNG</button>
+    <button id="reset" class="small-button" disabled>Reset</button>
+  </div>
+
+  <p style="margin-top: 2em;"><a href="https://www.bottleyourbrand.com/custom-stickers" target="_blank" style="text-decoration: none; color: #3185cc; font-weight: bold;">Use this image to order custom stickers →</a></p>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const dropArea = document.getElementById('dropArea');
+    const fileInput = document.getElementById('fileInput');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startDraw');
+    const smoothBtn = document.getElementById('smooth');
+    const downloadBtn = document.getElementById('download');
+    const resetBtn = document.getElementById('reset');
+    let img = new Image();
+    let drawing = false;
+    let points = [];
+
+    function handleFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img = new Image();
+        img.onload = () => {
+          dropArea.style.display = 'none';
+          canvas.style.display = 'block';
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          startBtn.disabled = false;
+          resetBtn.disabled = false;
+          smoothBtn.disabled = true;
+          downloadBtn.disabled = true;
+          startBtn.textContent = 'Start Tracing';
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    ['dragenter','dragover','dragleave','drop'].forEach(evt => {
+      dropArea.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    });
+    dropArea.addEventListener('dragover', () => dropArea.classList.add('hover'));
+    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('hover'));
+    dropArea.addEventListener('drop', (e) => {
+      dropArea.classList.remove('hover');
+      handleFile(e.dataTransfer.files[0]);
+    });
+    dropArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+    function chaikinSmooth(pts, iters = 2) {
+      let newPts = pts;
+      for (let k = 0; k < iters; k++) {
+        const res = [];
+        for (let i = 0; i < newPts.length; i++) {
+          const [x0, y0] = newPts[i];
+          const [x1, y1] = newPts[(i + 1) % newPts.length];
+          res.push([0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1]);
+          res.push([0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1]);
+        }
+        newPts = res;
+      }
+      return newPts;
+    }
+
+    function redrawPath(pathPts) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      if (pathPts.length > 1) {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(pathPts[0][0], pathPts[0][1]);
+        pathPts.forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+
+    startBtn.addEventListener('click', () => {
+      drawing = !drawing;
+      if (drawing) {
+        points = [];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        startBtn.textContent = 'Clear Trace';
+        smoothBtn.disabled = true;
+        downloadBtn.disabled = true;
+      } else {
+        points = [];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        startBtn.textContent = 'Start Tracing';
+        smoothBtn.disabled = true;
+        downloadBtn.disabled = true;
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      drawing = false;
+      points = [];
+      canvas.style.display = 'none';
+      dropArea.style.display = 'flex';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      startBtn.textContent = 'Start Tracing';
+      startBtn.disabled = true;
+      smoothBtn.disabled = true;
+      downloadBtn.disabled = true;
+      resetBtn.disabled = true;
+      fileInput.value = '';
+    });
+
+    function onMove(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      points.push([x, y]);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+
+    canvas.addEventListener('mousedown', e => {
+      if (!drawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      points = [[x, y]];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      canvas.addEventListener('mousemove', onMove);
+    });
+    canvas.addEventListener('mouseup', () => {
+      if (drawing) {
+        drawing = false;
+        canvas.removeEventListener('mousemove', onMove);
+        if (points.length > 1) {
+          ctx.closePath();
+          ctx.stroke();
+        }
+        smoothBtn.disabled = false;
+      }
+    });
+
+    // Mobile touch support
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      canvas.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      }));
+    }, { passive: false });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      canvas.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      }));
+    }, { passive: false });
+    canvas.addEventListener('touchend', e => {
+      e.preventDefault();
+      canvas.dispatchEvent(new MouseEvent('mouseup', {}));
+    });
+
+    smoothBtn.addEventListener('click', () => {
+      if (points.length < 2) return;
+      const closed = [...points, points[0]];
+      points = chaikinSmooth(closed, 3);
+      redrawPath(points);
+      downloadBtn.disabled = false;
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const mask = document.createElement('canvas');
+      mask.width = canvas.width;
+      mask.height = canvas.height;
+      const m = mask.getContext('2d');
+      m.drawImage(img, 0, 0);
+      m.beginPath();
+      m.moveTo(points[0][0], points[0][1]);
+      points.forEach(p => m.lineTo(p[0], p[1]));
+      m.closePath();
+      m.globalCompositeOperation = 'destination-in';
+      m.fill();
+      const final = document.createElement('canvas');
+      final.width = canvas.width;
+      final.height = canvas.height;
+      const f = final.getContext('2d');
+      f.fillStyle = 'white';
+      f.fillRect(0, 0, final.width, final.height);
+      f.drawImage(mask, 0, 0);
+      const link = document.createElement('a');
+      link.download = 'custom-sticker-outline.png';
+      link.href = final.toDataURL();
+      link.click();
+    });
+  });
+</script>
