@@ -2,7 +2,7 @@
 
 A lightweight web-based tool for tracing outlines around images to generate PNGs. Perfect for custom sticker printing.
 
-👉 [Try the Tool](https://yourusername.github.io/sticker-outline-tool/)
+👉 [Try the Tool](https://www.bottleyourbrand.com/blog/image-trace-tool/)
 
 ### Features
 - Drag-and-drop or click to upload image
